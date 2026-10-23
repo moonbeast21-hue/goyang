@@ -4,7 +4,11 @@
 
 ## 실행
 
-Windows 11에서 Python 3.11 이상과 FFmpeg를 설치하고 FFmpeg를 `PATH`에 추가합니다. 그다음 `run_windows.bat`을 더블클릭합니다. 처음 실행할 때 `install_windows.bat`이 전용 가상환경과 필요한 무료 라이브러리를 설치합니다. 인터넷이 없는 PC에서는 다른 PC에서 `.venv`와 FFmpeg를 함께 준비해야 합니다.
+Windows 11에서 Python 3.11 이상을 설치한 뒤 `run_windows.bat`을 더블클릭합니다. Python 설치 시 `Add Python to PATH`를 선택해야 합니다. 처음 실행할 때 `install_windows.bat`이 전용 가상환경과 필요한 무료 라이브러리를 설치하므로 인터넷 연결이 필요합니다.
+
+MP4 출력과 동영상 분석에는 FFmpeg가 필요합니다. 터미널에서 `winget install --id Gyan.FFmpeg -e`를 실행한 뒤 Windows를 다시 로그인하거나 재부팅하면 됩니다. FFmpeg가 없어도 프로그램을 열어 사진을 불러오고 프로젝트를 편집할 수 있습니다.
+
+실행에 실패하면 검은 창이 사라지지 않고 오류를 표시합니다. 그 내용을 확인하거나 사진으로 찍어 문제를 진단할 수 있습니다.
 
 개발 환경에서는 다음 명령을 사용합니다.
 
