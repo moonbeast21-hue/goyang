@@ -43,4 +43,4 @@ def test_photo_date_label_respects_precision():
     item.date_precision = DatePrecision.MONTH
     assert _date_label(item) == "2005년 3월"
     item.date_precision = DatePrecision.DAY
-    assert _date_label(item) == "2005년 3월 17일"
+    assert _date_label(item) == "2005년 3월"

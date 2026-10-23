@@ -60,9 +60,7 @@ def _date_label(item: MediaItem) -> str:
         return ""
     if item.date_precision == DatePrecision.YEAR:
         return f"{date.year}년"
-    if item.date_precision == DatePrecision.MONTH:
-        return f"{date.year}년 {date.month}월"
-    return f"{date.year}년 {date.month}월 {date.day}일"
+    return f"{date.year}년 {date.month}월"
 
 
 def _prepared_photo(item: MediaItem, destination: Path, show_date: bool = True, show_subtitle: bool = False) -> None:
