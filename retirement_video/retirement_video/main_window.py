@@ -148,6 +148,19 @@ class MainWindow(QMainWindow):
         self.music_volume = QSlider(Qt.Horizontal); self.music_volume.setRange(0, 100); self.music_volume.setValue(65)
         self.bpm_label = QLabel("-")
         music_form.addRow("음악", self.music_label); music_form.addRow(choose_music); music_form.addRow("배경음악 볼륨", self.music_volume); music_form.addRow("분석 BPM", self.bpm_label)
+        text_tab = QWidget(); text_form = QFormLayout(text_tab)
+        self.intro_text = QLineEdit()
+        self.ending_text1 = QLineEdit()
+        self.ending_text2 = QLineEdit()
+        save_text = QPushButton("시작·마지막 문구 적용")
+        save_text.clicked.connect(self.apply_text_settings)
+        text_help = QLabel("사진별 자막과 챕터 제목은 ‘사진/영상’ 탭에서 선택 항목마다 수정합니다.")
+        text_help.setWordWrap(True)
+        text_form.addRow("시작 화면", self.intro_text)
+        text_form.addRow("마지막 문구 1", self.ending_text1)
+        text_form.addRow("마지막 문구 2", self.ending_text2)
+        text_form.addRow(save_text)
+        text_form.addRow(text_help)
         auto = QWidget(); auto_form = QFormLayout(auto)
         self.style = QComboBox(); self.style.addItems(["감동적인 퇴임식", "밝고 즐거운 퇴임식", "영화 같은 추억 영상", "사용자 직접 설정"])
         self.style.setCurrentText("밝고 즐거운 퇴임식")
@@ -159,7 +172,7 @@ class MainWindow(QMainWindow):
         auto_form.addRow("스타일", self.style); auto_form.addRow("목표 길이(분)", self.target_minutes)
         auto_form.addRow("최소 재생시간", self.min_duration); auto_form.addRow("최대 재생시간", self.max_duration)
         auto_form.addRow("음악 동기화", self.sync); auto_form.addRow(run)
-        tabs.addTab(photo, "사진/영상"); tabs.addTab(music, "음악"); tabs.addTab(auto, "자동 편집")
+        tabs.addTab(photo, "사진/영상"); tabs.addTab(music, "음악"); tabs.addTab(text_tab, "자막/문구"); tabs.addTab(auto, "자동 편집")
         return tabs
 
     def _snapshot(self) -> None:
@@ -183,6 +196,9 @@ class MainWindow(QMainWindow):
         self.media_table.setUpdatesEnabled(True); self.timeline.setUpdatesEnabled(True)
         if self.project.music:
             track = self.project.music[0]; self.music_label.setText(Path(track.source_path).name); self.bpm_label.setText(str(track.bpm or "-")); self.music_volume.setValue(int(track.volume * 100))
+        self.intro_text.setText(self.project.settings.title)
+        self.ending_text1.setText(self.project.settings.ending_line1)
+        self.ending_text2.setText(self.project.settings.ending_line2)
         self.statusBar().showMessage(f"미디어 {len(self.project.items)}개 · 예상 길이 {sum(x.duration for x in self.project.items):.1f}초")
 
     def import_files(self) -> None:
@@ -269,6 +285,19 @@ class MainWindow(QMainWindow):
             QApplication.restoreOverrideCursor()
         self._refresh_all()
         self._show_item(photos[0])
+
+    def apply_text_settings(self) -> None:
+        title = self.intro_text.text().strip()
+        ending1 = self.ending_text1.text().strip()
+        ending2 = self.ending_text2.text().strip()
+        if not title or not ending1:
+            QMessageBox.warning(self, "문구 입력", "시작 화면과 마지막 문구 1은 비워둘 수 없습니다.")
+            return
+        self._snapshot()
+        self.project.settings.title = title
+        self.project.settings.ending_line1 = ending1
+        self.project.settings.ending_line2 = ending2
+        self.statusBar().showMessage("시작·마지막 문구를 적용했습니다.", 5000)
 
     def remove_selected(self) -> None:
         ids = set(self._selected_ids())
