@@ -90,7 +90,7 @@ def _prepared_photo(item: MediaItem, destination: Path) -> None:
         image.save(destination, quality=95)
 
 
-def _render_still(ffmpeg: str, image: Path, output: Path, duration: float, width: int, height: int, fps: int) -> None:
+def _render_still(ffmpeg: str, image: Path, output: Path, duration: float, width: int, height: int, fps: int, preset: str) -> None:
     fade_out = max(0, duration - 0.45)
     vf = (
         f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
@@ -98,15 +98,15 @@ def _render_still(ffmpeg: str, image: Path, output: Path, duration: float, width
         f"fps={fps},fade=t=in:st=0:d=0.35,fade=t=out:st={fade_out:.3f}:d=0.45,format=yuv420p"
     )
     _run([ffmpeg, "-y", "-loop", "1", "-i", str(image), "-t", f"{duration:.3f}", "-vf", vf,
-          "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(output)])
+          "-an", "-c:v", "libx264", "-preset", preset, "-crf", "21", str(output)])
 
 
-def _render_video(ffmpeg: str, item: MediaItem, output: Path, width: int, height: int, fps: int) -> None:
+def _render_video(ffmpeg: str, item: MediaItem, output: Path, width: int, height: int, fps: int, preset: str) -> None:
     end = item.trim_end if item.trim_end is not None else item.source_duration
     duration = max(0.1, end - item.trim_start) if end else item.duration
     vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,fps={fps},format=yuv420p"
     _run([ffmpeg, "-y", "-ss", f"{item.trim_start:.3f}", "-i", item.source_path, "-t", f"{duration:.3f}",
-          "-vf", vf, "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", str(output)])
+          "-vf", vf, "-an", "-c:v", "libx264", "-preset", preset, "-crf", "21", str(output)])
 
 
 def render_project(project: VideoProject, destination: str | Path, progress: Callable[[int, str], None] | None = None) -> Path:
@@ -116,6 +116,8 @@ def render_project(project: VideoProject, destination: str | Path, progress: Cal
     destination = Path(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     settings = project.settings
+    if progress:
+        progress(1, "출력 구성과 제목 화면을 준비하는 중")
     with tempfile.TemporaryDirectory(prefix="retirement-video-") as temporary_name:
         temporary = Path(temporary_name)
         sources: list[tuple[Path, float, MediaItem | None]] = []
@@ -135,27 +137,33 @@ def render_project(project: VideoProject, destination: str | Path, progress: Cal
         sources.append((ending, 5.0, None))
         clips: list[Path] = []
         for index, (source, duration, item) in enumerate(sources):
+            if progress:
+                progress(2 + int(index / len(sources) * 88), f"장면 {index + 1}/{len(sources)} 인코딩 중")
             clip = temporary / f"clip_{index:04d}.mp4"
             if item and item.media_type == MediaType.VIDEO:
-                _render_video(ffmpeg, item, clip, settings.width, settings.height, settings.fps)
+                _render_video(ffmpeg, item, clip, settings.width, settings.height, settings.fps, settings.encoder_preset)
             else:
                 prepared = source
                 if item:
                     prepared = temporary / f"photo_{index:04d}.jpg"
                     _prepared_photo(item, prepared)
-                _render_still(ffmpeg, prepared, clip, duration, settings.width, settings.height, settings.fps)
+                _render_still(ffmpeg, prepared, clip, duration, settings.width, settings.height, settings.fps, settings.encoder_preset)
             clips.append(clip)
             if progress:
-                progress(int((index + 1) / (len(sources) + 1) * 90), f"장면 {index + 1}/{len(sources)} 처리 중")
+                progress(2 + int((index + 1) / len(sources) * 88), f"장면 {index + 1}/{len(sources)} 완료")
         concat_file = temporary / "concat.txt"
         concat_file.write_text("".join(f"file '{clip.as_posix()}'\n" for clip in clips), encoding="utf-8")
         silent = temporary / "silent.mp4"
+        if progress:
+            progress(92, "장면을 하나의 영상으로 합치는 중")
         _run([ffmpeg, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_file), "-c", "copy", str(silent)])
         if project.music:
             track = project.music[0]
             total = sum(duration for _, duration, _ in sources)
             fade_out = max(0, total - track.fade_out)
             af = f"volume={track.volume},afade=t=in:st=0:d={track.fade_in},afade=t=out:st={fade_out:.3f}:d={track.fade_out},atrim=duration={total:.3f}"
+            if progress:
+                progress(95, "배경음악을 영상에 합치는 중")
             _run([ffmpeg, "-y", "-i", str(silent), "-stream_loop", "-1", "-i", track.source_path,
                   "-filter:a", af, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", str(destination)])
         else:

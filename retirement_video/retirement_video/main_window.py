@@ -9,7 +9,7 @@ from PySide6.QtGui import QAction, QDesktopServices, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QApplication, QComboBox, QDateTimeEdit, QDialog, QFileDialog,
     QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
-    QMainWindow, QMessageBox, QProgressDialog, QPushButton, QSlider, QSpinBox,
+    QInputDialog, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QSlider, QSpinBox,
     QDoubleSpinBox, QSplitter, QStatusBar, QTabWidget, QTableWidget, QTableWidgetItem,
     QTextEdit, QToolBar, QVBoxLayout, QWidget,
 )
@@ -329,10 +329,22 @@ class MainWindow(QMainWindow):
 
     def export_video(self) -> None:
         if not self.project.items: QMessageBox.warning(self, "출력", "먼저 미디어를 불러오세요."); return
+        quality, accepted = QInputDialog.getItem(
+            self, "출력 방식", "출력 품질을 선택하세요.",
+            ["빠른 출력 (1280×720, 권장)", "Full HD 출력 (1920×1080)"], 0, False,
+        )
+        if not accepted: return
         path, _ = QFileDialog.getSaveFileName(self, "MP4 출력", "퇴임식_기념영상.mp4", "MP4 영상 (*.mp4)")
         if not path: return
-        progress = QProgressDialog("영상 출력 준비 중", "", 0, 100, self); progress.setCancelButton(None); progress.setWindowModality(Qt.WindowModal); progress.show()
-        thread = QThread(self); worker = RenderWorker(copy.deepcopy(self.project), path); worker.moveToThread(thread)
+        render_project_copy = copy.deepcopy(self.project)
+        if quality.startswith("빠른"):
+            render_project_copy.settings.width = 1280; render_project_copy.settings.height = 720
+            render_project_copy.settings.fps = 24; render_project_copy.settings.encoder_preset = "superfast"
+        else:
+            render_project_copy.settings.width = 1920; render_project_copy.settings.height = 1080
+            render_project_copy.settings.fps = 30; render_project_copy.settings.encoder_preset = "veryfast"
+        progress = QProgressDialog("출력 작업을 시작하는 중", "", 0, 100, self); progress.setCancelButton(None); progress.setWindowModality(Qt.WindowModal); progress.setMinimumDuration(0); progress.show()
+        thread = QThread(self); worker = RenderWorker(render_project_copy, path); worker.moveToThread(thread)
         worker.progress.connect(lambda p,m: (progress.setValue(p), progress.setLabelText(m)))
         worker.failed.connect(lambda m: (progress.close(), QMessageBox.critical(self, "출력 오류", m), thread.quit()))
         worker.finished.connect(lambda p: (progress.close(), QMessageBox.information(self, "출력 완료", f"영상이 저장되었습니다.\n{p}"), thread.quit()))
