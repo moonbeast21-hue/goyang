@@ -32,6 +32,9 @@ class MainWindow(QMainWindow):
         self.redo_stack: list[VideoProject] = []
         self.settings = QSettings("RetirementVideo", "RetirementVideoMaker")
         self.worker_thread: QThread | None = None
+        self.import_worker: ImportWorker | None = None
+        self.render_worker: RenderWorker | None = None
+        self.render_progress: QProgressDialog | None = None
         self.setWindowTitle("퇴임식 기념영상 제작기")
         self.resize(1440, 900)
         self.setAcceptDrops(True)
@@ -197,6 +200,7 @@ class MainWindow(QMainWindow):
         existing = {x.content_hash for x in self.project.items}; self._snapshot()
         progress = QProgressDialog("미디어 분석 중", "취소", 0, 100, self); progress.setWindowModality(Qt.WindowModal)
         thread = QThread(self); worker = ImportWorker(paths, root); worker.moveToThread(thread)
+        self.import_worker = worker
         def add(item):
             if item.content_hash not in existing:
                 existing.add(item.content_hash); self.project.items.append(item)
@@ -204,7 +208,9 @@ class MainWindow(QMainWindow):
         worker.failed.connect(lambda m: QMessageBox.critical(self, "불러오기 오류", m))
         worker.finished.connect(lambda: (progress.close(), self._refresh_all(), thread.quit()))
         progress.canceled.connect(lambda: setattr(worker, "cancelled", True)); thread.started.connect(worker.run)
-        thread.finished.connect(worker.deleteLater); thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(lambda: setattr(self, "import_worker", None))
+        thread.finished.connect(thread.deleteLater)
         self.worker_thread = thread; thread.start()
 
     def dragEnterEvent(self, event) -> None:
@@ -344,12 +350,38 @@ class MainWindow(QMainWindow):
             render_project_copy.settings.width = 1920; render_project_copy.settings.height = 1080
             render_project_copy.settings.fps = 30; render_project_copy.settings.encoder_preset = "veryfast"
         progress = QProgressDialog("출력 작업을 시작하는 중", "", 0, 100, self); progress.setCancelButton(None); progress.setWindowModality(Qt.WindowModal); progress.setMinimumDuration(0); progress.show()
+        self.render_progress = progress
         thread = QThread(self); worker = RenderWorker(render_project_copy, path); worker.moveToThread(thread)
-        worker.progress.connect(lambda p,m: (progress.setValue(p), progress.setLabelText(m)))
-        worker.failed.connect(lambda m: (progress.close(), QMessageBox.critical(self, "출력 오류", m), thread.quit()))
-        worker.finished.connect(lambda p: (progress.close(), QMessageBox.information(self, "출력 완료", f"영상이 저장되었습니다.\n{p}"), thread.quit()))
-        thread.started.connect(worker.run); thread.finished.connect(worker.deleteLater); thread.finished.connect(thread.deleteLater)
+        self.render_worker = worker
+        worker.progress.connect(self._render_progress_changed)
+        worker.failed.connect(self._render_failed)
+        worker.finished.connect(self._render_finished)
+        thread.started.connect(worker.run)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(lambda: setattr(self, "render_worker", None))
+        thread.finished.connect(thread.deleteLater)
         self.worker_thread = thread; thread.start()
+
+    def _render_progress_changed(self, percent: int, message: str) -> None:
+        if self.render_progress:
+            self.render_progress.setLabelText(message)
+            self.render_progress.setValue(percent)
+
+    def _render_failed(self, message: str) -> None:
+        if self.render_progress:
+            self.render_progress.close()
+            self.render_progress = None
+        if self.worker_thread:
+            self.worker_thread.quit()
+        QMessageBox.critical(self, "출력 오류", message)
+
+    def _render_finished(self, path: str) -> None:
+        if self.render_progress:
+            self.render_progress.close()
+            self.render_progress = None
+        if self.worker_thread:
+            self.worker_thread.quit()
+        QMessageBox.information(self, "출력 완료", f"영상이 저장되었습니다.\n{path}")
 
     def _filter_media(self, text: str) -> None:
         text = text.casefold()
