@@ -162,6 +162,7 @@ class MainWindow(QMainWindow):
         return [self.media_table.item(row, 0).data(Qt.UserRole) for row in sorted({x.row() for x in self.media_table.selectedItems()})]
 
     def _refresh_all(self) -> None:
+        self.media_table.setUpdatesEnabled(False); self.timeline.setUpdatesEnabled(False)
         self.media_table.setRowCount(0); self.timeline.clear()
         for media in self.project.items:
             row = self.media_table.rowCount(); self.media_table.insertRow(row)
@@ -169,6 +170,7 @@ class MainWindow(QMainWindow):
             for col, value in enumerate(values):
                 cell = QTableWidgetItem(value); cell.setData(Qt.UserRole, media.id); self.media_table.setItem(row, col, cell)
             self.timeline.add_media(media)
+        self.media_table.setUpdatesEnabled(True); self.timeline.setUpdatesEnabled(True)
         if self.project.music:
             track = self.project.music[0]; self.music_label.setText(Path(track.source_path).name); self.bpm_label.setText(str(track.bpm or "-")); self.music_volume.setValue(int(track.volume * 100))
         self.statusBar().showMessage(f"미디어 {len(self.project.items)}개 · 예상 길이 {sum(x.duration for x in self.project.items):.1f}초")

@@ -35,7 +35,7 @@ class TimelineList(QListWidget):
         item.setText(f"{badge} {media.display_name}\n{media.duration:.1f}초 · {media.chapter}")
         item.setToolTip(f"{media.source_path}\n날짜: {media.capture_date or '미확인'} ({media.date_source})")
         if media.media_type == MediaType.PHOTO:
-            pixmap = QPixmap(media.source_path)
+            pixmap = QPixmap(media.thumbnail_path) if media.thumbnail_path else QPixmap()
             if not pixmap.isNull():
                 item.setIcon(pixmap.scaled(120, 75, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         item.setSizeHint(item.sizeHint().expandedTo(QPixmap(155, 125).size()))

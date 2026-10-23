@@ -52,6 +52,7 @@ class MediaItem:
     width: int = 0
     height: int = 0
     content_hash: str = ""
+    thumbnail_path: str = ""
 
     def __post_init__(self) -> None:
         if not self.display_name:

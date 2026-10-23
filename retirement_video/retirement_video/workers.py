@@ -6,6 +6,7 @@ from PySide6.QtCore import QObject, Signal, Slot
 
 from .metadata import analyze_media
 from .renderer import render_project
+from .thumbnails import create_thumbnail
 
 
 class ImportWorker(QObject):
@@ -26,7 +27,9 @@ class ImportWorker(QObject):
             for index, path in enumerate(self.paths):
                 if self.cancelled:
                     break
-                self.item_ready.emit(analyze_media(path, self.root))
+                item = analyze_media(path, self.root)
+                item.thumbnail_path = create_thumbnail(item)
+                self.item_ready.emit(item)
                 self.progress.emit(int((index + 1) / len(self.paths) * 100), Path(path).name)
         except Exception as exc:
             self.failed.emit(str(exc))
