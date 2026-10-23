@@ -102,6 +102,7 @@ class ProjectSettings:
     show_chapter_cards: bool = False
     show_photo_dates: bool = True
     show_photo_subtitles: bool = False
+    video_max_duration: float = 10.0
 
 
 @dataclass

@@ -33,7 +33,7 @@ def _nearest_interval(target: float, beats: list[float], minimum: float, maximum
 def auto_edit(project: VideoProject) -> list[str]:
     settings = project.settings
     editable = [x for x in project.items if x.media_type == MediaType.PHOTO and not x.locked]
-    video_seconds = sum(x.duration for x in project.items if x.media_type == MediaType.VIDEO)
+    video_seconds = sum(min(x.duration, settings.video_max_duration) for x in project.items if x.media_type == MediaType.VIDEO)
     target = settings.target_seconds
     if target and editable:
         base = (target - video_seconds) / len(editable)

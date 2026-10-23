@@ -3,6 +3,7 @@ from pathlib import Path
 from retirement_video.auto_editor import auto_edit, sort_by_date
 from retirement_video.models import MediaItem, MediaType, VideoProject
 from retirement_video.project_io import load_project, save_project
+from retirement_video.renderer import _effective_video_duration
 
 
 def item(name: str, date: str | None = None):
@@ -39,4 +40,11 @@ def test_auto_edit_respects_locks_and_limits():
     assert project.items[0].duration == 9
     assert project.items[1].duration == 4.0
     assert not warnings
+
+
+def test_video_output_uses_only_first_ten_seconds():
+    video = MediaItem("clip.mp4", MediaType.VIDEO, duration=25, source_duration=25)
+    assert _effective_video_duration(video, 10) == 10
+    video.source_duration = 6
+    assert _effective_video_duration(video, 10) == 6
 

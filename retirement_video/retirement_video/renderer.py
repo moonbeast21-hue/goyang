@@ -29,6 +29,26 @@ def _run(command: list[str]) -> None:
         raise RenderError(message or "FFmpeg 실행에 실패했습니다.")
 
 
+def _has_audio_stream(path: str) -> bool:
+    ffprobe = shutil.which("ffprobe")
+    if not ffprobe:
+        return False
+    result = subprocess.run(
+        [ffprobe, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=index", "-of", "csv=p=0", path],
+        capture_output=True, text=True, encoding="utf-8", errors="replace",
+    )
+    return result.returncode == 0 and bool(result.stdout.strip())
+
+
+def _effective_video_duration(item: MediaItem, maximum: float) -> float:
+    available_end = item.trim_end if item.trim_end is not None else item.source_duration
+    if available_end:
+        available = max(0.1, available_end - item.trim_start)
+    else:
+        available = max(0.1, item.duration)
+    return min(maximum, available)
+
+
 def _font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     candidates = [
         Path("C:/Windows/Fonts/malgun.ttf"),
@@ -111,16 +131,23 @@ def _render_still(ffmpeg: str, image: Path, output: Path, duration: float, width
         f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,"
         f"fps={fps},fade=t=in:st=0:d=0.35,fade=t=out:st={fade_out:.3f}:d=0.45,format=yuv420p"
     )
-    _run([ffmpeg, "-y", "-loop", "1", "-i", str(image), "-t", f"{duration:.3f}", "-vf", vf,
-          "-an", "-c:v", "libx264", "-preset", preset, "-crf", "21", str(output)])
+    _run([ffmpeg, "-y", "-loop", "1", "-i", str(image), "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+          "-t", f"{duration:.3f}", "-vf", vf, "-map", "0:v:0", "-map", "1:a:0",
+          "-c:v", "libx264", "-preset", preset, "-crf", "21", "-c:a", "aac", "-b:a", "192k", "-shortest", str(output)])
 
 
-def _render_video(ffmpeg: str, item: MediaItem, output: Path, width: int, height: int, fps: int, preset: str) -> None:
-    end = item.trim_end if item.trim_end is not None else item.source_duration
-    duration = max(0.1, end - item.trim_start) if end else item.duration
+def _render_video(ffmpeg: str, item: MediaItem, output: Path, duration: float, width: int, height: int, fps: int, preset: str) -> None:
     vf = f"scale={width}:{height}:force_original_aspect_ratio=decrease,pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,fps={fps},format=yuv420p"
-    _run([ffmpeg, "-y", "-ss", f"{item.trim_start:.3f}", "-i", item.source_path, "-t", f"{duration:.3f}",
-          "-vf", vf, "-an", "-c:v", "libx264", "-preset", preset, "-crf", "21", str(output)])
+    command = [ffmpeg, "-y", "-ss", f"{item.trim_start:.3f}", "-i", item.source_path]
+    if _has_audio_stream(item.source_path):
+        command += ["-t", f"{duration:.3f}", "-vf", vf, "-map", "0:v:0", "-map", "0:a:0",
+                    "-c:v", "libx264", "-preset", preset, "-crf", "21", "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]
+    else:
+        command += ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{duration:.3f}", "-vf", vf,
+                    "-map", "0:v:0", "-map", "1:a:0", "-c:v", "libx264", "-preset", preset, "-crf", "21",
+                    "-c:a", "aac", "-b:a", "192k", "-shortest"]
+    command.append(str(output))
+    _run(command)
 
 
 def render_project(project: VideoProject, destination: str | Path, progress: Callable[[int, str], None] | None = None) -> Path:
@@ -145,7 +172,8 @@ def render_project(project: VideoProject, destination: str | Path, progress: Cal
                 card = temporary / f"chapter_{len(sources):04d}.jpg"
                 _card(card, [chapter], settings.width, settings.height)
                 sources.append((card, 2.0, None))
-            sources.append((Path(item.source_path), item.duration, item))
+            duration = _effective_video_duration(item, settings.video_max_duration) if item.media_type == MediaType.VIDEO else item.duration
+            sources.append((Path(item.source_path), duration, item))
         ending = temporary / "ending.jpg"
         _card(ending, [settings.ending_line1, settings.ending_line2], settings.width, settings.height)
         sources.append((ending, 5.0, None))
@@ -155,7 +183,7 @@ def render_project(project: VideoProject, destination: str | Path, progress: Cal
                 progress(2 + int(index / len(sources) * 88), f"장면 {index + 1}/{len(sources)} 인코딩 중")
             clip = temporary / f"clip_{index:04d}.mp4"
             if item and item.media_type == MediaType.VIDEO:
-                _render_video(ffmpeg, item, clip, settings.width, settings.height, settings.fps, settings.encoder_preset)
+                _render_video(ffmpeg, item, clip, duration, settings.width, settings.height, settings.fps, settings.encoder_preset)
             else:
                 prepared = source
                 if item:
@@ -175,11 +203,22 @@ def render_project(project: VideoProject, destination: str | Path, progress: Cal
             track = project.music[0]
             total = sum(duration for _, duration, _ in sources)
             fade_out = max(0, total - track.fade_out)
-            af = f"volume={track.volume},afade=t=in:st=0:d={track.fade_in},afade=t=out:st={fade_out:.3f}:d={track.fade_out},atrim=duration={total:.3f}"
+            cursor = 0.0
+            video_ranges: list[tuple[float, float]] = []
+            for _, duration, item in sources:
+                if item and item.media_type == MediaType.VIDEO:
+                    video_ranges.append((cursor, cursor + duration))
+                cursor += duration
+            if video_ranges:
+                ranges = "+".join(f"between(t\\,{start:.3f}\\,{end:.3f})" for start, end in video_ranges)
+                volume = f"volume=if(gt({ranges}\\,0)\\,0\\,{track.volume}):eval=frame"
+            else:
+                volume = f"volume={track.volume}"
+            af = f"[1:a]{volume},afade=t=in:st=0:d={track.fade_in},afade=t=out:st={fade_out:.3f}:d={track.fade_out},atrim=duration={total:.3f}[bg];[0:a][bg]amix=inputs=2:duration=first:normalize=0[aout]"
             if progress:
                 progress(95, "배경음악을 영상에 합치는 중")
             _run([ffmpeg, "-y", "-i", str(silent), "-stream_loop", "-1", "-i", track.source_path,
-                  "-filter:a", af, "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", str(destination)])
+                  "-filter_complex", af, "-map", "0:v:0", "-map", "[aout]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", str(destination)])
         else:
             shutil.copy2(silent, destination)
         if progress:

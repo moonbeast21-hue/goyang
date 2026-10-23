@@ -195,7 +195,7 @@ def analyze_media(path: str | Path, media_root: str | Path | None = None) -> Med
         source_path=str(path), media_type=media_type,
         capture_date=guess.value.isoformat(timespec="seconds") if guess.value else None,
         date_precision=guess.precision, date_source=guess.source, chapter=chapter,
-        duration=source_duration if media_type == MediaType.VIDEO and source_duration else 4.0,
+        duration=min(source_duration, 10.0) if media_type == MediaType.VIDEO and source_duration else 4.0,
         source_duration=source_duration, width=width, height=height,
         content_hash=quick_hash(path),
     )
