@@ -16,3 +16,20 @@ def test_large_photo_uses_small_cached_thumbnail(tmp_path: Path, monkeypatch):
     with Image.open(item.thumbnail_path) as thumbnail:
         assert thumbnail.size == THUMBNAIL_SIZE
     assert Path(item.thumbnail_path).stat().st_size < source.stat().st_size
+
+
+def test_thumbnail_rotation_changes_orientation(tmp_path: Path, monkeypatch):
+    monkeypatch.setattr("retirement_video.thumbnails.thumbnail_cache_dir", lambda: tmp_path / "cache")
+    (tmp_path / "cache").mkdir()
+    source = tmp_path / "portrait.jpg"
+    Image.new("RGB", (300, 600), "blue").save(source)
+    item = analyze_media(source, tmp_path)
+    item.rotation = 90
+    rotated = Path(create_thumbnail(item))
+    assert rotated.name.endswith("_r90.jpg")
+    with Image.open(rotated) as thumbnail:
+        # 가로 사진으로 회전되어 위아래 여백이 생긴다.
+        center = thumbnail.getpixel((120, 67))
+        top = thumbnail.getpixel((120, 5))
+        assert center[2] > 150
+        assert top[2] < 100

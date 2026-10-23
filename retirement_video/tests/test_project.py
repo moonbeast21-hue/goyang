@@ -17,11 +17,13 @@ def test_stable_date_sort_keeps_unknown_last():
 
 def test_project_round_trip(tmp_path: Path):
     project = VideoProject(name="테스트", items=[item("한글 사진.jpg", "2020-01-01T00:00:00")])
+    project.items[0].rotation = 270
     output = tmp_path / "기념영상.retirevideo"
     save_project(project, output)
     loaded = load_project(output)
     assert loaded.name == "테스트"
     assert loaded.items[0].display_name == "한글 사진.jpg"
+    assert loaded.items[0].rotation == 270
 
 
 def test_auto_edit_respects_locks_and_limits():

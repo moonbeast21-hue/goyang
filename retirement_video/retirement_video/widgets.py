@@ -33,7 +33,7 @@ class TimelineList(QListWidget):
     def update_media(self, item: QListWidgetItem, media: MediaItem) -> None:
         badge = "📷" if media.media_type == MediaType.PHOTO else "🎬"
         item.setText(f"{badge} {media.display_name}\n{media.duration:.1f}초 · {media.chapter}")
-        item.setToolTip(f"{media.source_path}\n날짜: {media.capture_date or '미확인'} ({media.date_source})")
+        item.setToolTip(f"{media.source_path}\n날짜: {media.capture_date or '미확인'} ({media.date_source})\n회전: {media.rotation % 360}°")
         if media.media_type == MediaType.PHOTO:
             pixmap = QPixmap(media.thumbnail_path) if media.thumbnail_path else QPixmap()
             if not pixmap.isNull():

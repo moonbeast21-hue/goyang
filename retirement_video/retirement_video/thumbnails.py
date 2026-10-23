@@ -21,7 +21,8 @@ def create_thumbnail(item: MediaItem) -> str:
     """원본을 GUI에 올리지 않도록 작은 JPEG 썸네일을 디스크에 만든다."""
     if not item.content_hash:
         return ""
-    destination = thumbnail_cache_dir() / f"{item.content_hash}.jpg"
+    rotation = item.rotation % 360
+    destination = thumbnail_cache_dir() / f"{item.content_hash}_r{rotation}.jpg"
     if destination.exists() and destination.stat().st_size:
         return str(destination)
     temporary = destination.with_suffix(".tmp.jpg")
@@ -31,6 +32,9 @@ def create_thumbnail(item: MediaItem) -> str:
                 # JPEG는 전체 해상도 디코딩 전에 축소 힌트를 적용해 메모리를 줄인다.
                 source.draft("RGB", (480, 270))
                 image = ImageOps.exif_transpose(source).convert("RGB")
+                if rotation:
+                    # Pillow의 양수 각도는 반시계 방향이다.
+                    image = image.rotate(rotation, expand=True)
                 image.thumbnail(THUMBNAIL_SIZE, Image.Resampling.LANCZOS, reducing_gap=3.0)
                 canvas = Image.new("RGB", THUMBNAIL_SIZE, "#111827")
                 canvas.paste(image, ((THUMBNAIL_SIZE[0] - image.width) // 2, (THUMBNAIL_SIZE[1] - image.height) // 2))

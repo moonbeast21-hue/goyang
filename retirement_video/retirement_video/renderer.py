@@ -57,6 +57,8 @@ def _card(path: Path, lines: list[str], width: int, height: int) -> None:
 def _prepared_photo(item: MediaItem, destination: Path) -> None:
     with Image.open(item.source_path) as source:
         image = ImageOps.exif_transpose(source).convert("RGB")
+        if item.rotation % 360:
+            image = image.rotate(item.rotation % 360, expand=True)
         for region in item.mosaics:
             left = max(0, int(region.x * image.width))
             top = max(0, int(region.y * image.height))

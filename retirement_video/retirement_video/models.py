@@ -53,6 +53,7 @@ class MediaItem:
     height: int = 0
     content_hash: str = ""
     thumbnail_path: str = ""
+    rotation: int = 0
 
     def __post_init__(self) -> None:
         if not self.display_name:

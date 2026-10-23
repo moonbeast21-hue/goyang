@@ -19,6 +19,7 @@ from .auto_editor import auto_edit, sort_by_date
 from .metadata import AUDIO_EXTENSIONS, PHOTO_EXTENSIONS, VIDEO_EXTENSIONS, collect_media
 from .models import DatePrecision, MusicTrack, VideoProject
 from .project_io import load_project, package_project, resolve_project_paths, save_project
+from .thumbnails import create_thumbnail
 from .widgets import TimelineList
 from .workers import ImportWorker, RenderWorker
 
@@ -129,9 +130,15 @@ class MainWindow(QMainWindow):
         self.transition = QComboBox(); self.transition.addItems(["효과 없음", "페이드", "크로스 디졸브", "좌우 슬라이드", "상하 슬라이드", "부드러운 확대", "부드러운 축소", "Ken Burns"])
         self.importance = QComboBox(); self.importance.addItems(["일반", "중요", "하이라이트"])
         self.chapter = QLineEdit(); self.subtitle = QTextEdit(); self.subtitle.setMaximumHeight(80)
+        rotate_row = QHBoxLayout()
+        rotate_left = QPushButton("↶ 왼쪽 90°"); rotate_left.clicked.connect(lambda: self.rotate_selected(90))
+        rotate_right = QPushButton("↷ 오른쪽 90°"); rotate_right.clicked.connect(lambda: self.rotate_selected(-90))
+        rotate_180 = QPushButton("↕ 180°"); rotate_180.clicked.connect(lambda: self.rotate_selected(180))
+        rotate_row.addWidget(rotate_left); rotate_row.addWidget(rotate_right); rotate_row.addWidget(rotate_180)
+        rotate_widget = QWidget(); rotate_widget.setLayout(rotate_row)
         apply_photo = QPushButton("선택 항목에 적용"); apply_photo.clicked.connect(self.apply_properties)
         form.addRow("재생시간", self.duration); form.addRow("전환", self.transition); form.addRow("중요도", self.importance)
-        form.addRow("챕터", self.chapter); form.addRow("자막", self.subtitle); form.addRow(apply_photo)
+        form.addRow("사진 회전", rotate_widget); form.addRow("챕터", self.chapter); form.addRow("자막", self.subtitle); form.addRow(apply_photo)
         music = QWidget(); music_form = QFormLayout(music)
         self.music_label = QLabel("선택된 음악 없음")
         choose_music = QPushButton("음악 선택 및 분석"); choose_music.clicked.connect(self.choose_music)
@@ -224,7 +231,7 @@ class MainWindow(QMainWindow):
         self.duration.setValue(media.duration); self.transition.setCurrentText(media.transition)
         self.importance.setCurrentText(media.importance); self.chapter.setText(media.chapter); self.subtitle.setPlainText(media.subtitle)
         self.preview_caption.setText(f"{media.display_name} · {media.capture_date or '날짜 미확인'} · {media.chapter}")
-        pixmap = QPixmap(media.source_path)
+        pixmap = QPixmap(media.thumbnail_path or media.source_path)
         self.preview.setPixmap(pixmap.scaled(self.preview.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)) if not pixmap.isNull() else self.preview.setText("동영상 미리보기는 출력 영상에서 확인하세요")
 
     def apply_properties(self) -> None:
@@ -236,6 +243,26 @@ class MainWindow(QMainWindow):
             item = self._item_by_id(item_id); item.duration = self.duration.value(); item.transition = self.transition.currentText()
             item.importance = self.importance.currentText(); item.chapter = self.chapter.text().strip() or "날짜 미확인"; item.subtitle = self.subtitle.toPlainText()
         self._refresh_all()
+
+    def rotate_selected(self, degrees: int) -> None:
+        ids = self._selected_ids()
+        if not ids and self.timeline.currentItem():
+            ids = [self.timeline.currentItem().data(Qt.UserRole)]
+        photos = [self._item_by_id(item_id) for item_id in ids]
+        photos = [item for item in photos if item and item.media_type.value == "photo"]
+        if not photos:
+            QMessageBox.information(self, "사진 회전", "회전할 사진을 먼저 선택하세요.")
+            return
+        self._snapshot()
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            for item in photos:
+                item.rotation = (item.rotation + degrees) % 360
+                item.thumbnail_path = create_thumbnail(item)
+        finally:
+            QApplication.restoreOverrideCursor()
+        self._refresh_all()
+        self._show_item(photos[0])
 
     def remove_selected(self) -> None:
         ids = set(self._selected_ids())
