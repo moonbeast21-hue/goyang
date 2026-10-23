@@ -8,7 +8,7 @@ from typing import Callable
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
-from .models import MediaItem, MediaType, VideoProject
+from .models import DatePrecision, MediaItem, MediaType, VideoProject
 
 
 class RenderError(RuntimeError):
@@ -54,7 +54,18 @@ def _card(path: Path, lines: list[str], width: int, height: int) -> None:
     image.save(path, quality=95)
 
 
-def _prepared_photo(item: MediaItem, destination: Path) -> None:
+def _date_label(item: MediaItem) -> str:
+    date = item.parsed_date
+    if not date:
+        return ""
+    if item.date_precision == DatePrecision.YEAR:
+        return f"{date.year}년"
+    if item.date_precision == DatePrecision.MONTH:
+        return f"{date.year}년 {date.month}월"
+    return f"{date.year}년 {date.month}월 {date.day}일"
+
+
+def _prepared_photo(item: MediaItem, destination: Path, show_date: bool = True, show_subtitle: bool = False) -> None:
     with Image.open(item.source_path) as source:
         image = ImageOps.exif_transpose(source).convert("RGB")
         if item.rotation % 360:
@@ -76,10 +87,15 @@ def _prepared_photo(item: MediaItem, destination: Path) -> None:
                 image.paste(pixelated, (left, top), mask)
             else:
                 image.paste(pixelated, (left, top))
-        if item.subtitle.strip():
+        labels: list[str] = []
+        if show_date and _date_label(item):
+            labels.append(_date_label(item))
+        if show_subtitle and item.subtitle.strip():
+            labels.append(item.subtitle.strip())
+        if labels:
             draw = ImageDraw.Draw(image, "RGBA")
             font = _font(max(24, image.width // 28))
-            text = item.subtitle.strip()
+            text = "\n".join(labels)
             box = draw.multiline_textbbox((0, 0), text, font=font, align="center", spacing=8)
             text_width, text_height = box[2] - box[0], box[3] - box[1]
             x = (image.width - text_width) // 2
@@ -126,7 +142,7 @@ def render_project(project: VideoProject, destination: str | Path, progress: Cal
         sources.append((title, 3.0, None))
         chapter = None
         for item in project.items:
-            if item.chapter != chapter and item.chapter != "날짜 미확인":
+            if settings.show_chapter_cards and item.chapter != chapter and item.chapter != "날짜 미확인":
                 chapter = item.chapter
                 card = temporary / f"chapter_{len(sources):04d}.jpg"
                 _card(card, [chapter], settings.width, settings.height)
@@ -146,7 +162,7 @@ def render_project(project: VideoProject, destination: str | Path, progress: Cal
                 prepared = source
                 if item:
                     prepared = temporary / f"photo_{index:04d}.jpg"
-                    _prepared_photo(item, prepared)
+                    _prepared_photo(item, prepared, settings.show_photo_dates, settings.show_photo_subtitles)
                 _render_still(ffmpeg, prepared, clip, duration, settings.width, settings.height, settings.fps, settings.encoder_preset)
             clips.append(clip)
             if progress:

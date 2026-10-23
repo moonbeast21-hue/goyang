@@ -4,6 +4,8 @@ from PIL import Image
 
 from retirement_video.metadata import analyze_media
 from retirement_video.thumbnails import THUMBNAIL_SIZE, create_thumbnail
+from retirement_video.models import DatePrecision, MediaItem, MediaType
+from retirement_video.renderer import _date_label
 
 
 def test_large_photo_uses_small_cached_thumbnail(tmp_path: Path, monkeypatch):
@@ -33,3 +35,12 @@ def test_thumbnail_rotation_changes_orientation(tmp_path: Path, monkeypatch):
         top = thumbnail.getpixel((120, 5))
         assert center[2] > 150
         assert top[2] < 100
+
+
+def test_photo_date_label_respects_precision():
+    item = MediaItem("photo.jpg", MediaType.PHOTO, capture_date="2005-03-17T00:00:00", date_precision=DatePrecision.YEAR)
+    assert _date_label(item) == "2005년"
+    item.date_precision = DatePrecision.MONTH
+    assert _date_label(item) == "2005년 3월"
+    item.date_precision = DatePrecision.DAY
+    assert _date_label(item) == "2005년 3월 17일"

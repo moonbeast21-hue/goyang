@@ -99,6 +99,9 @@ class ProjectSettings:
     height: int = 1080
     fps: int = 30
     encoder_preset: str = "veryfast"
+    show_chapter_cards: bool = False
+    show_photo_dates: bool = True
+    show_photo_subtitles: bool = False
 
 
 @dataclass

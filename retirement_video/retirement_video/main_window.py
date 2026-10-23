@@ -7,7 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QSettings, Qt, QThread, QTimer, QUrl
 from PySide6.QtGui import QAction, QDesktopServices, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView, QApplication, QComboBox, QDateTimeEdit, QDialog, QFileDialog,
+    QAbstractItemView, QApplication, QCheckBox, QComboBox, QDateTimeEdit, QDialog, QFileDialog,
     QFormLayout, QHBoxLayout, QHeaderView, QLabel, QLineEdit, QListWidget,
     QInputDialog, QMainWindow, QMessageBox, QProgressDialog, QPushButton, QSlider, QSpinBox,
     QDoubleSpinBox, QSplitter, QStatusBar, QTabWidget, QTableWidget, QTableWidgetItem,
@@ -152,6 +152,10 @@ class MainWindow(QMainWindow):
         self.intro_text = QLineEdit()
         self.ending_text1 = QLineEdit()
         self.ending_text2 = QLineEdit()
+        self.show_chapter_cards = QCheckBox("영상 중간에 챕터 제목 화면 표시")
+        self.show_photo_dates = QCheckBox("사진 아래에 촬영 날짜 표시")
+        self.show_photo_dates.setChecked(True)
+        self.show_photo_subtitles = QCheckBox("사진별 자막도 영상에 표시")
         save_text = QPushButton("시작·마지막 문구 적용")
         save_text.clicked.connect(self.apply_text_settings)
         text_help = QLabel("사진별 자막과 챕터 제목은 ‘사진/영상’ 탭에서 선택 항목마다 수정합니다.")
@@ -159,6 +163,9 @@ class MainWindow(QMainWindow):
         text_form.addRow("시작 화면", self.intro_text)
         text_form.addRow("마지막 문구 1", self.ending_text1)
         text_form.addRow("마지막 문구 2", self.ending_text2)
+        text_form.addRow("챕터 화면", self.show_chapter_cards)
+        text_form.addRow("사진 날짜", self.show_photo_dates)
+        text_form.addRow("사진 자막", self.show_photo_subtitles)
         text_form.addRow(save_text)
         text_form.addRow(text_help)
         auto = QWidget(); auto_form = QFormLayout(auto)
@@ -199,6 +206,9 @@ class MainWindow(QMainWindow):
         self.intro_text.setText(self.project.settings.title)
         self.ending_text1.setText(self.project.settings.ending_line1)
         self.ending_text2.setText(self.project.settings.ending_line2)
+        self.show_chapter_cards.setChecked(self.project.settings.show_chapter_cards)
+        self.show_photo_dates.setChecked(self.project.settings.show_photo_dates)
+        self.show_photo_subtitles.setChecked(self.project.settings.show_photo_subtitles)
         self.statusBar().showMessage(f"미디어 {len(self.project.items)}개 · 예상 길이 {sum(x.duration for x in self.project.items):.1f}초")
 
     def import_files(self) -> None:
@@ -297,6 +307,9 @@ class MainWindow(QMainWindow):
         self.project.settings.title = title
         self.project.settings.ending_line1 = ending1
         self.project.settings.ending_line2 = ending2
+        self.project.settings.show_chapter_cards = self.show_chapter_cards.isChecked()
+        self.project.settings.show_photo_dates = self.show_photo_dates.isChecked()
+        self.project.settings.show_photo_subtitles = self.show_photo_subtitles.isChecked()
         self.statusBar().showMessage("시작·마지막 문구를 적용했습니다.", 5000)
 
     def remove_selected(self) -> None:
